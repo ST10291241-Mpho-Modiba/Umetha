@@ -471,7 +471,6 @@ export default function MainLayout({
                     aria-label={t('common.close')}
                   >
                     <X size={20} />
-                    
                   </button>
                 </div>
                 <SideNavigation onClose={() => setIsRightSidebarOpen(false)} />
