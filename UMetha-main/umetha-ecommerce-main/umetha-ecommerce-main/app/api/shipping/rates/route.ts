@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     const normalized = results.map((r) => {
       return {
         carrier: r.carrier,
-        rates: r.rates || [],
+        rates: Array.isArray(r.rates) ? r.rates : [],
       };
     });
 

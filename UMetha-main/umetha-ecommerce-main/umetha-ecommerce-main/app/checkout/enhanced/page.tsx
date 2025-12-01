@@ -2,17 +2,15 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ChevronLeft,
-  CreditCard,
-  ArrowRight,
   Truck,
   Shield,
-  Check,
   MapPin,
   Calendar,
   Mail,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,38 +24,66 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 
 export default function CheckoutPage() {
+  // --- Hooks and State ---
   const { items } = useCart();
   const { user, supabase } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+
   const [activeStep, setActiveStep] = useState("shipping");
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
-    state: "",
-    postalCode: "",
-    country: "United States",
-    saveInfo: true,
-    shippingMethod: "standard",
-    paymentMethod: "credit-card",
-    cardNumber: "",
-    cardName: "",
-    cardExpiry: "",
-    cardCvc: "",
-    paypalEmail: "",
-  });
   const [isProcessing, setIsProcessing] = useState(false);
-  const [formErrors, setFormErrors] = useState({});
+
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("credit-card");
 
-  const subtotal = items.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0
-  );
+ type FormData = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  saveInfo: boolean;
+  shippingMethod: string;
+  paymentMethod: string;
+  cardNumber: string;
+  cardName: string;
+  cardExpiry: string;
+  cardCvc: string;
+  paypalEmail: string;
+};
+
+type FormErrors = {
+  [key: string]: string;
+};
+
+const [formData, setFormData] = useState<FormData>({
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  address: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  country: "United States",
+  saveInfo: true,
+  shippingMethod: "standard",
+  paymentMethod: "credit-card",
+  cardNumber: "",
+  cardName: "",
+  cardExpiry: "",
+  cardCvc: "",
+  paypalEmail: "",
+});
+
+const [formErrors, setFormErrors] = useState<FormErrors>({});
+
+
+  // --- Calculated amounts ---
+  const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
   const shippingCost =
     formData.shippingMethod === "express"
       ? 14.99
@@ -67,25 +93,49 @@ export default function CheckoutPage() {
   const tax = subtotal * 0.08;
   const total = subtotal + shippingCost + tax;
 
-  const handleChange = (e) => {
+  // --- Helper Functions ---
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
       [name]: type === "checkbox" ? checked : value,
     });
-    if (formErrors[name]) {
-      setFormErrors({ ...formErrors, [name]: "" });
+    if (formErrors[name]) setFormErrors({ ...formErrors, [name]: "" });
+  };
+
+  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formattedValue = formatCardNumber(e.target.value);
+    setFormData({ ...formData, cardNumber: formattedValue });
+    if (formErrors.cardNumber) setFormErrors({ ...formErrors, cardNumber: "" });
+  };
+
+  const formatCardNumber = (value: string) => {
+    const v = value.replace(/\s+/g, "").replace(/[^0-9]/gi, "");
+    const matches = v.match(/\d{4,16}/g);
+    const match = (matches && matches[0]) || "";
+    const parts = [];
+    for (let i = 0; i < match.length; i += 4) {
+      parts.push(match.substring(i, i + 4));
     }
+    return parts.length ? parts.join(" ") : value;
+  };
+
+  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, "");
+    if (value.length > 2) value = value.slice(0, 2) + "/" + value.slice(2, 4);
+    setFormData({ ...formData, cardExpiry: value });
+    if (formErrors.cardExpiry) setFormErrors({ ...formErrors, cardExpiry: "" });
   };
 
   const validateForm = (step: string) => {
     const errors: Record<string, string> = {};
+
     if (step === "shipping") {
       if (!formData.firstName) errors.firstName = "First name is required";
       if (!formData.lastName) errors.lastName = "Last name is required";
       if (!formData.email) errors.email = "Email is required";
-      else if (!/\S+@\S+\.\S+/.test(formData.email))
-        errors.email = "Email is invalid";
+      else if (!/\S+@\S+\.\S+/.test(formData.email)) errors.email = "Email is invalid";
       if (!formData.address) errors.address = "Address is required";
       if (!formData.city) errors.city = "City is required";
       if (!formData.postalCode) errors.postalCode = "Postal code is required";
@@ -100,134 +150,104 @@ export default function CheckoutPage() {
         if (!formData.paypalEmail) errors.paypalEmail = "PayPal email is required";
       }
     }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleCardNumberChange = (e) => {
-    const formattedValue = formatCardNumber(e.target.value);
-    setFormData({ ...formData, cardNumber: formattedValue });
-    if (formErrors.cardNumber) {
-      setFormErrors({ ...formErrors, cardNumber: "" });
-    }
-  };
-
-  const formatCardNumber = (value) => {
-    const v = value.replace(/\s+/g, "").replace(/[^0-9]/gi, "");
-    const matches = v.match(/\d{4,16}/g);
-    const match = (matches && matches[0]) || "";
-    const parts = [];
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
-    }
-    if (parts.length) {
-      return parts.join(" ");
-    } else {
-      return value;
-    }
-  };
-
-  const handleExpiryChange = (e) => {
-    let { value } = e.target;
-    value = value.replace(/\D/g, "");
-    if (value.length > 2) {
-      value = value.slice(0, 2) + "/" + value.slice(2, 4);
-    }
-    setFormData({ ...formData, cardExpiry: value });
-    if (formErrors.cardExpiry) {
-      setFormErrors({ ...formErrors, cardExpiry: "" });
-    }
-  };
-
   const handleContinue = () => {
     if (validateForm(activeStep)) {
-      if (activeStep === "shipping") {
-        setActiveStep("payment");
-      } else if (activeStep === "payment") {
-        handleSubmitOrder();
-      }
+      setActiveStep(activeStep === "shipping" ? "payment" : "shipping");
     }
   };
 
   const handleBack = () => {
-    if (activeStep === "payment") {
-      setActiveStep("shipping");
-    }
+    if (activeStep === "payment") setActiveStep("shipping");
   };
 
-  const handleSubmitOrder = () => {
-    if (!validateForm("payment")) return;
-    setIsProcessing(true);
-    // Process payment based on selected payment method
-    // For simplicity, assuming payment is successful
+  // --- Async functions for order and payment ---
+  const createOrder = async () => {
+    const { data, error } = await supabase
+      .from("orders")
+      .insert({
+        user_id: user?.id,
+        total_amount: total,
+        shipping_address: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          postalCode: formData.postalCode,
+          country: formData.country,
+        },
+        payment_method: selectedPaymentMethod,
+        order_items: items.map((item) => ({
+          product_id: item.id,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        status: "processing",
+        payment_status: "paid",
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
 
-    const createOrder = async () => {
-      // Create the order in your orders table
-      const { data, error } = await supabase
-        .from("orders")
-        .insert({
-          user_id: user.id,
-          total_amount: total,
-          shipping_address: {
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            address: formData.address,
-            city: formData.city,
-            state: formData.state,
-            postalCode: formData.postalCode,
-            country: formData.country,
-          },
-          payment_method: formData.paymentMethod,
-          order_items: items.map((item) => ({
-            product_id: item.id,
-            quantity: item.quantity,
-            price: item.price,
-          })),
-          status: "processing",
-          payment_status: "paid",
-          created_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return data.id;
-    };
-
-    // Simulate payment process
-    const paymentResult = await simulatePaymentProcess();
-    if (paymentResult.success) {
-      const orderId = await createOrder();
-      setIsProcessing(false);
-      toast({
-        title: "Order placed successfully!",
-        description: "Redirecting you to order tracking...",
-        variant: "success",
-      });
-      router.push(`/orders/${orderId}`);
-    } else {
-      setIsProcessing(false);
-      toast({
-        title: "Payment failed",
-        description: "Please try again or use a different payment method.",
-        variant: "destructive",
-      });
-    }
+    if (error) throw error;
+    return data.id;
   };
 
   const simulatePaymentProcess = async () => {
-    // Simulate a payment success for now
     return { success: true };
   };
 
+  const handleSubmitOrder = async () => {
+    if (!validateForm("payment")) return;
+    setIsProcessing(true);
+
+    try {
+      const paymentResult = await simulatePaymentProcess();
+
+      if (paymentResult.success) {
+        const orderId = await createOrder();
+        toast({
+          title: "Order placed successfully!",
+          description: "Redirecting you to order tracking...",
+           variant: "default",
+        });
+        router.push(`/orders/${orderId}`);
+      } else {
+        toast({
+          title: "Payment failed",
+          description: "Please try again or use a different payment method.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Unexpected error",
+        description: "Something went wrong during checkout.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // --- Load user profile if logged in ---
   useEffect(() => {
     async function loadUserProfile() {
       if (!user) return;
+
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .single();
-      if (error) throw error;
+
+      if (error) return;
+
       setFormData((prevData) => ({
         ...prevData,
         firstName: data.first_name || "",
@@ -241,8 +261,10 @@ export default function CheckoutPage() {
         country: data.country || "United States",
       }));
     }
+
     loadUserProfile();
   }, [user, supabase]);
+
 
   return (
     <MainLayout>

@@ -1,99 +1,83 @@
 // lib/auth.ts
 
-import { Adapter } from "next-auth/adapters";
-import { User, Session } from "next-auth";
-import { NextAuthOptions } from "next-auth";
-import Providers from "next-auth/providers";
+import NextAuth, { NextAuthOptions } from "next-auth";
+import EmailProvider from "next-auth/providers/email";
+import type { Adapter } from "next-auth/adapters";
+import type { User as AdapterUser } from "next-auth";
 
-// Mock database call (replace this with your actual DB call)
+// Mock database call (replace with your actual DB call)
 const yourDatabaseCallToGetUserById = async (id: string) => {
-  // Simulate a user record
   return {
     id,
     email: "user@example.com",
     name: "John Doe",
-    role: "admin", // Ensure this field exists
+    role: "admin",
+    emailVerified: null,
   };
 };
 
-// Custom Adapter implementation
+// Custom Adapter
 const myCustomAdapter: Adapter = {
-  async getUser(id: string): Promise<User | null> {
+  async getUser(id: string): Promise<AdapterUser | null> {
     const user = await yourDatabaseCallToGetUserById(id);
+    if (!user) return null;
+    return user as AdapterUser; // satisfies v4 Adapter type
+  },
 
-    if (user) {
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role || "user", // Ensure 'role' is provided
-      };
-    }
+  async createUser(user: AdapterUser): Promise<AdapterUser> {
+    return {
+      ...user,
+      id: user.id ?? "generated-id",
+    };
+  },
+
+  async updateUser(user: AdapterUser): Promise<AdapterUser> {
+    return user;
+  },
+
+  async getUserByEmail(email: string): Promise<AdapterUser | null> {
     return null;
   },
 
-  // Additional adapter methods like `createUser`, `updateUser`, etc., can be added here if necessary
-  async createUser(user: User) {
-    // Create user logic (e.g., insert into DB)
-    return user;
+  async getUserByAccount(provider: string, providerAccountId: string): Promise<AdapterUser | null> {
+    return null;
   },
 
-  async updateUser(user: User) {
-    // Update user logic
-    return user;
-  },
-
-  async getUserByEmail(email: string) {
-    // Get user by email logic (replace with real DB query)
-    return null; // Mock, adjust to real behavior
-  },
-
-  async getUserByAccount(provider: string, providerAccountId: string) {
-    // Handle provider-based accounts (like OAuth)
-    return null; // Mock, adjust to real behavior
-  },
-
-  // You can define more adapter methods as per your application's requirements
+  // Other optional adapter methods can go here
 };
 
-// NextAuth configuration
+// NextAuth v4 configuration
 export const authOptions: NextAuthOptions = {
   providers: [
-    Providers.Email({
-      server: process.env.EMAIL_SERVER, // Configure your email provider
-      from: process.env.EMAIL_FROM,
+    EmailProvider({
+      server: process.env.EMAIL_SERVER!,
+      from: process.env.EMAIL_FROM!,
     }),
-    // Add other OAuth providers as necessary (e.g., Google, GitHub)
   ],
-
-  adapter: myCustomAdapter, // Use the custom adapter here
-
+  adapter: myCustomAdapter,
   session: {
-    strategy: "jwt", // Use JWT session strategy
+    strategy: "jwt",
   },
-
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
+        (token as any).role = (user as any).role ?? "user";
       }
       return token;
     },
-
     async session({ session, token }) {
-      if (token) {
+      if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
+        (session.user as any).role = (token as any).role;
       }
       return session;
     },
   },
-
   pages: {
-    signIn: "/auth/signin", // Customize the sign-in page as needed
-    error: "/auth/error", // Optional error page
+    signIn: "/auth/signin",
+    error: "/auth/error",
   },
 };
 
-export default myCustomAdapter;
+export default NextAuth(authOptions);

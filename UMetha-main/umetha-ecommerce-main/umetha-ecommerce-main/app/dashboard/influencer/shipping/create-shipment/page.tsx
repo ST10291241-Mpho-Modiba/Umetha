@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import MainLayout from "@/components/main-layout";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,9 +39,31 @@ export default function CreateShipmentPage() {
   const [tracking, setTracking] = useState("");
 
   const parcel = {
-    weight: Number(weight),
-    dimensions: { length: Number(length), width: Number(width), height: Number(height) },
-  };
+  weight: Number(weight) || 1,
+  dimensions: {
+    length: Number(length) || 1,
+    width: Number(width) || 1,
+    height: Number(height) || 1
+  }
+};
+
+
+const normalizedFrom = {
+  country: fromAddress.country || "US",
+  state: fromAddress.state || "CA",
+  ...fromAddress
+};
+
+const normalizedTo = {
+  country: toAddress.country || "US",
+  state: toAddress.state || "CA",
+  ...toAddress
+};
+
+
+
+
+
 
   const fetchShippingRates = async () => {
     try {
@@ -49,14 +71,15 @@ export default function CreateShipmentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          carrier,
-          fromAddress,
-          toAddress,
-          weight: parcel.weight,
-          dimensions: parcel.dimensions,
-          prefer: "cheapest",
-          useNearestWarehouse: true,
-        }),
+  carrier,
+  fromAddress: normalizedFrom,
+  toAddress: normalizedTo,
+  weight: parcel.weight,
+  dimensions: parcel.dimensions,
+  prefer: "cheapest",
+  useNearestWarehouse: true,
+}),
+
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Failed to fetch rates");
@@ -131,7 +154,7 @@ export default function CreateShipmentPage() {
   };
 
   return (
-    <MainLayout>
+   
       <div className="container mx-auto p-6">
         <h2 className="text-2xl font-semibold mb-4">Create Shipment</h2>
 
@@ -242,6 +265,6 @@ export default function CreateShipmentPage() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+   
   );
 }
